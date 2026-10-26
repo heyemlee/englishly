@@ -9,8 +9,8 @@ from .config import DB_PATH
 # 1: v0.1; 2: cards, phrases, conversations, retells; 3: settings; 4: podcasts; 5: card kinds;
 # 6: YouTube channels and audio; 7: AI features removed (phrases, conversations, AI notes and feedback);
 # 8: Chinese translations; 9: study annotations, clip lessons and listening progress; 10: manual notebook entries;
-# 11: locally playable video; 12: starred episodes
-SCHEMA_VERSION = 12
+# 11: locally playable video; 12: starred episodes; 13: on-site streaming study; 14: official Chinese subtitle tracks
+SCHEMA_VERSION = 14
 
 # One expression gives up to three cards ("siblings", same `note`): produce (see the meaning, say the English),
 # listen (hear the original sentence, get the meaning) and cloze (fill in the expression).
@@ -155,6 +155,55 @@ CREATE TABLE IF NOT EXISTS listening_events (
     seconds REAL NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Netflix/Hulu stay in their own players. Only visible subtitles, supplied study notes and position are stored.
+CREATE TABLE IF NOT EXISTS streaming_sessions (
+    id INTEGER PRIMARY KEY,
+    provider TEXT NOT NULL CHECK (provider IN ('netflix', 'hulu')),
+    media_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    position REAL NOT NULL DEFAULT 0,
+    duration REAL NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(provider, media_id)
+);
+CREATE TABLE IF NOT EXISTS streaming_cues (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL REFERENCES streaming_sessions(id) ON DELETE CASCADE,
+    cue_key TEXT NOT NULL,
+    start REAL NOT NULL,
+    end REAL NOT NULL,
+    text TEXT NOT NULL,
+    timing TEXT NOT NULL CHECK (timing IN ('exact', 'observed')),
+    translation_zh TEXT,
+    annotations TEXT NOT NULL DEFAULT '[]',
+    UNIQUE(session_id, cue_key)
+);
+CREATE TABLE IF NOT EXISTS streaming_lessons (
+    session_id INTEGER NOT NULL REFERENCES streaming_sessions(id) ON DELETE CASCADE,
+    clip INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    goal TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY(session_id, clip)
+);
+-- Keep official captions separate: their timing and sentence boundaries need not match English or Codex notes.
+CREATE TABLE IF NOT EXISTS streaming_official_subtitles (
+    id INTEGER PRIMARY KEY,
+    session_id INTEGER NOT NULL REFERENCES streaming_sessions(id) ON DELETE CASCADE,
+    track_id TEXT NOT NULL,
+    language TEXT NOT NULL,
+    label TEXT NOT NULL,
+    cue_key TEXT NOT NULL,
+    start REAL NOT NULL,
+    end REAL NOT NULL,
+    text TEXT NOT NULL,
+    UNIQUE(session_id, track_id, cue_key)
+);
+CREATE INDEX IF NOT EXISTS idx_streaming_official_time ON streaming_official_subtitles(session_id, start);
+CREATE INDEX IF NOT EXISTS idx_streaming_recent ON streaming_sessions(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_streaming_cues_time ON streaming_cues(session_id, start);
 
 CREATE INDEX IF NOT EXISTS idx_sentences_episode ON sentences(episode_id, idx);
 CREATE INDEX IF NOT EXISTS idx_attempts_sentence ON attempts(sentence_id, kind);

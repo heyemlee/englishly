@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { api, episodeHref, formatTime, thumbnail, type EpisodeSummary } from "@/lib/api";
+import { api, episodeHref, formatTime, thumbnail, type EpisodeSummary, type StreamingSession } from "@/lib/api";
 import { parseStamp } from "@/lib/time";
 import { usePref } from "@/lib/usePref";
 import { IconStarFilled } from "@/components/icons";
@@ -39,6 +39,7 @@ function length(seconds: number) {
 
 export default function HistoryPage() {
   const [episodes, setEpisodes] = useState<EpisodeSummary[] | null>(null);
+  const [streaming, setStreaming] = useState<StreamingSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = usePref<(typeof TABS)[number]>("history.tab", "recent");
 
@@ -47,6 +48,7 @@ export default function HistoryPage() {
       .episodes()
       .then(setEpisodes)
       .catch((e: Error) => setError(e.message));
+    api.streamingHistory().then(setStreaming).catch((e: Error) => setError(e.message));
   }, []);
 
   const matching =
@@ -55,7 +57,14 @@ export default function HistoryPage() {
       : (episodes ?? [])
           .filter((ep) => ep.status === "ready" && ep.last_activity_at && (tab === "recent" || finished(ep)))
           .sort((a, b) => (b.last_activity_at ?? "").localeCompare(a.last_activity_at ?? ""));
-  const shown = tab === "starred" ? matching : matching.slice(0, LIMIT);
+  const recentKeys = new Set(
+    [...matching.map((e) => ({ key: `episode:${e.id}`, at: e.last_activity_at ?? "" })),
+      ...streaming.map((s) => ({ key: `streaming:${s.id}`, at: s.updated_at }))]
+      .sort((a, b) => b.at.localeCompare(a.at)).slice(0, LIMIT).map((r) => r.key),
+  );
+  const shown = tab === "starred" ? matching : tab === "recent"
+    ? matching.filter((e) => recentKeys.has(`episode:${e.id}`)) : matching.slice(0, LIMIT);
+  const shownStreaming = streaming.filter((s) => recentKeys.has(`streaming:${s.id}`));
 
   return (
     <div className="space-y-6">
@@ -69,7 +78,7 @@ export default function HistoryPage() {
           <Spinner /> 加载中
         </p>
       )}
-      {episodes !== null && shown.length === 0 && (
+      {episodes !== null && shown.length === 0 && !(tab === "recent" && streaming.length > 0) && (
         <Card pad="roomy" className="text-center text-muted">
           {EMPTY[tab]}
         </Card>
@@ -114,7 +123,33 @@ export default function HistoryPage() {
           );
         })}
       </ul>
-      {matching.length > shown.length && <p className="text-center text-xs text-subtle">只显示最近 {LIMIT} 条</p>}
+      {tab === "recent" && shownStreaming.length > 0 && (
+        <section className="space-y-3" aria-label="官网学习记录">
+          <h2 className="text-sm font-medium text-muted">Netflix / Hulu</h2>
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {shownStreaming.map((session) => (
+              <li key={session.id}>
+                <a
+                  href={`${session.url}?podecho_t=${session.position}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="glass block rounded-3xl p-5 transition-colors hover:bg-(--glass-strong)"
+                  title="在官网打开，用插件的「继续」按钮恢复位置"
+                >
+                  <div className="text-xs text-subtle">{session.provider === "netflix" ? "Netflix" : "Hulu"} ↗</div>
+                  <div className="mt-2 line-clamp-2 text-[15px] font-medium">{session.title}</div>
+                  <div className="mt-2 text-[13px] text-muted">
+                    {dayText(session.updated_at)} · 看至 {formatTime(session.position)} · {session.cue_count} 条字幕
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {tab !== "starred" && matching.length + (tab === "recent" ? streaming.length : 0) > LIMIT && (
+        <p className="text-center text-xs text-subtle">只显示最近 {LIMIT} 条</p>
+      )}
     </div>
   );
 }

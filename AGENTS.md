@@ -61,3 +61,12 @@
 - 只听不看的地方（复习的听音卡、单词本回放、误听重练）没有下载音频时，`/api/media/{id}` 直接放准备好的 MP4，这三处的 `has_audio` 也把 MP4 算进去；练习页和节目列表的 `has_audio` 仍然只指下载的音频。
 - 后台任务（转写、下载音频、准备视频）进行中时，前端轮询 `GET /api/episodes/{id}/status`（只有任务字段），任务结束后才重新加载整集，不要每隔几秒重新拉整集数据。
 - 前端要能静态导出：不加动态路由段（练习页是 `/episode?id=…&s=…`，链接用 `episodeHref`），不用需要服务器的功能（route handler、路由的 `dynamic` 配置、服务端读 cookie／headers）；`next.config.ts` 里的 rewrites／redirects 只在开发服务器上生效。
+
+## Netflix／Hulu 官网插件（2026-10-26）
+
+- 视频留在用户已登录的官网播放器中，不下载、录屏或读取 DRM、账号和 cookie。`extension/streaming.js` 读取英文 TextTrack／已显示字幕，也支持用户导入 SRT／VTT；Netflix 播放控制通过 `netflix-player.js` 的 MAIN world 小桥接执行，桥接不连接本机 API。
+- 官网字幕与进度单独存于 `streaming_sessions`／`streaming_cues`／`streaming_lessons`，不伪装成可本地播放的 YouTube 节目，不启动任何下载或 Whisper。网页字幕时间为估计值，不能声称拥有未读到的未来字幕；真实平台兼容性与模拟测试区分说明。
+- 用户指定处理 Netflix／Hulu 这一集时，从 `GET /api/streaming` 按标题选择，读 `GET /api/streaming/{provider}/{media_id}`，通过同路径的 `PUT .../study` 保存中文、重点与片段目标。结构沿用普通 study（sentence_id 用字幕 id，clip 为 floor(start/180)），仅处理已捕获／导入的内容，保留英文、时间与记录。保存后插件「刷新讲解」显示；不要引入翻译密钥和外部模型调用。
+- 收藏通过现有 `POST /api/chunks/manual`，保留官网来源、时间链接和上下文；按用户选择加入复习，重复冲突不重置已有卡片。学习记录的最近学习区显示官网记录，点开回到官网继续。
+- 官方双字幕：`netflix-subtitles.js` 在 MAIN world 仅读取官方字幕元数据和文字字幕，支持 TTML／IMSC／DFXP／VTT；通用 TextTrack 可读取中英文两轨。按时间重叠对齐，保留简体／繁体选择；官方中文放 `streaming_official_subtitles`，不覆盖 `streaming_cues.translation_zh` 和已有讲解。显示优先已保存中文，再用官方中文补缺，隐藏字幕时中文和来源提示一起隐藏。
+- 「读取双字幕」必要时会暂停并依次加载官方字幕，再恢复官网原来的字幕及播放状态；仅访问 Netflix 自有字幕域名，主动读取不附带 cookie，不改写播放请求或 DRM。遇到没有中文、无法读取或网站改版需说明具体限制，不自动调用翻译服务。2026-10-26 用户选择先完成适配、暂不登录；自动测试与真实订阅实播验收分开记录。

@@ -35,6 +35,18 @@ export type LearningProgress = {
 
 export type ListeningEvent = { id: string; sentence_id: number; start: number; end: number; seconds: number };
 
+export type StreamingSession = {
+  id: number;
+  provider: "netflix" | "hulu";
+  media_id: string;
+  title: string;
+  url: string;
+  position: number;
+  duration: number;
+  updated_at: string;
+  cue_count: number;
+};
+
 export type Sentence = {
   id: number;
   idx: number;
@@ -295,6 +307,7 @@ export const api = {
   downloadAudio: (id: number) => request<{ ok: boolean }>(`/api/episodes/${id}/audio`, { method: "POST" }),
   prepareVideo: (id: number) => request<{ ok: boolean }>(`/api/episodes/${id}/video`, { method: "POST" }),
   episodes: () => request<EpisodeSummary[]>("/api/episodes"),
+  streamingHistory: () => request<StreamingSession[]>("/api/streaming"),
   importEpisode: (url: string) => request<EpisodeDetail>("/api/episodes", { method: "POST", body: json({ url }) }),
   episode: (id: number) => request<EpisodeDetail>(`/api/episodes/${id}`),
   episodeStatus: (id: number) => request<EpisodeStatus>(`/api/episodes/${id}/status`),

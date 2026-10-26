@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PodEcho：在 YouTube 上逐句练",
-  "version": "0.1.0",
-  "description": "看 YouTube 时逐句重播、单句循环、每句后暂停；句子来自你本机的 PodEcho。",
+  "name": "PodEcho：视频逐句学英语",
+  "version": "0.3.0",
+  "description": "在 YouTube、Netflix 和 Hulu 官网逐句重播、循环和收藏表达，学习内容保存在本机 PodEcho。",
   "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "action": { "default_title": "PodEcho 设置", "default_popup": "options.html" },
   "options_page": "options.html",
@@ -14,6 +14,17 @@
     {
       "matches": ["https://www.youtube.com/*"],
       "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.netflix.com/*", "https://netflix.com/*"],
+      "js": ["streaming-core.js", "netflix-player.js", "netflix-subtitles.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.netflix.com/*", "https://netflix.com/*", "https://www.hulu.com/*", "https://hulu.com/*"],
+      "js": ["streaming-core.js", "streaming.js"],
       "run_at": "document_idle"
     }
   ]

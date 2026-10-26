@@ -10,7 +10,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import auth, learning, media, pages, podcasts, retell, review, stats, video, youtube_extras
+from . import auth, learning, media, pages, podcasts, retell, review, stats, streaming, video, youtube_extras
 from .auth import local_only
 from .config import CLIP_SECONDS, CORS_ORIGINS
 from .db import connect, init_db
@@ -37,7 +37,7 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*
 # Pages, scripts and JSON shrink to about a third (matters on a phone over mobile data); audio, video and byte ranges
 # are left alone.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
-for module in (auth, review, retell, stats, podcasts, youtube_extras, learning, video):
+for module in (auth, review, retell, stats, podcasts, youtube_extras, learning, video, streaming):
     app.include_router(module.router)
 
 
