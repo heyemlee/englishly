@@ -1,0 +1,18 @@
+.DS_Store
+
+# backend
+backend/.venv/
+backend/.env
+backend/data/
+__pycache__/
+.pytest_cache/
+
+# web
+web/node_modules/
+web/.next/
+web/next-env.d.ts
+
+web/out/
+
+# local Claude Code config (machine-specific paths)
+.claude/
