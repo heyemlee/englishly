@@ -176,6 +176,19 @@ def get_episode(episode_id: int):
         return episode_detail(conn, episode_id)
 
 
+@app.get("/api/episodes/{episode_id}/status")
+def get_episode_status(episode_id: int):
+    """What the background jobs are doing (transcribing, audio, video), for polling without reloading every sentence."""
+    with connect() as conn:
+        row = conn.execute(
+            """SELECT status, status_detail, audio_status, audio_detail, video_status, video_detail
+                 FROM episodes WHERE id = ?""", (episode_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(404, "找不到这个视频。")
+    return dict(row)
+
+
 @app.delete("/api/episodes/{episode_id}")
 def delete_episode(episode_id: int):
     with connect() as conn:

@@ -154,3 +154,12 @@ def test_listening_elsewhere_plays_the_mp4_instead_of_youtube(client):
                                        "details": {"missed": ["work"]}})
     assert client.get("/api/mishears/practice").json()["items"][0]["has_audio"] is True
     assert client.get("/api/episodes/1").json()["has_audio"] is False  # the practice page still shows the video
+
+
+def test_polling_reads_only_the_job_fields(client):
+    add_sentence()
+    app.video.status(1, "processing", "准备视频 40%")
+    assert client.get("/api/episodes/1/status").json() == {
+        "status": "ready", "status_detail": "", "audio_status": "", "audio_detail": "",
+        "video_status": "processing", "video_detail": "准备视频 40%"}
+    assert client.get("/api/episodes/999/status").status_code == 404

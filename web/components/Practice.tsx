@@ -14,6 +14,7 @@ import {
   videoUrl,
   type Chunk,
   type EpisodeDetail,
+  type EpisodeStatus,
   type Sentence,
 } from "@/lib/api";
 import { diffWords, type WordDiff } from "@/lib/diff";
@@ -112,16 +113,38 @@ function BackButton() {
   );
 }
 
-/** A podcast episode still downloading / transcribing (or failed): show progress and poll until it's ready. */
-function Processing({ episode, onUpdate }: { episode: EpisodeDetail; onUpdate: (ep: EpisodeDetail) => void }) {
-  const [error, setError] = useState<string | null>(null);
+type EpisodeSetter = React.Dispatch<React.SetStateAction<EpisodeDetail | null>>;
+const ignoreError = () => {};
+
+/**
+ * While a background job runs (`job` is "processing"), poll just the jobs' fields and merge them in when they change,
+ * so the page doesn't reload and re-render every sentence each time; reload the whole episode once the job ends (its
+ * sentences, times or files may be new).
+ */
+function useJobPoll(episodeId: number, job: "status" | "audio_status" | "video_status", running: boolean,
+                    every: number, onUpdate: EpisodeSetter, onError: (message: string) => void = ignoreError) {
   useEffect(() => {
-    if (episode.status !== "processing") return;
+    if (!running) return;
     const timer = window.setInterval(() => {
-      api.episode(episode.id).then(onUpdate).catch(() => undefined);
-    }, 3000);
+      api.episodeStatus(episodeId)
+        .then((now) => {
+          if (now[job] !== "processing") return api.episode(episodeId).then(onUpdate);
+          onUpdate((ep) => {
+            if (!ep) return ep;
+            const changed = (Object.keys(now) as (keyof EpisodeStatus)[]).some((key) => ep[key] !== now[key]);
+            return changed ? { ...ep, ...now } : ep;
+          });
+        })
+        .catch((e: Error) => onError(e.message));
+    }, every);
     return () => window.clearInterval(timer);
-  }, [episode.id, episode.status, onUpdate]);
+  }, [episodeId, job, running, every, onUpdate, onError]);
+}
+
+/** A podcast episode still downloading / transcribing (or failed): show progress and poll until it's ready. */
+function Processing({ episode, onUpdate }: { episode: EpisodeDetail; onUpdate: EpisodeSetter }) {
+  const [error, setError] = useState<string | null>(null);
+  useJobPoll(episode.id, "status", episode.status === "processing", 3000, onUpdate);
 
   const retry = async () => {
     setError(null);
@@ -175,13 +198,7 @@ function AudioBar({
 }) {
   const [error, setError] = useState<string | null>(null);
   const processing = episode.audio_status === "processing";
-  useEffect(() => {
-    if (!processing) return;
-    const timer = window.setInterval(() => {
-      api.episode(episode.id).then(onUpdate).catch(() => undefined);
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [episode.id, processing, onUpdate]);
+  useJobPoll(episode.id, "audio_status", processing, 3000, onUpdate);
 
   const start = async () => {
     setError(null);
@@ -256,13 +273,7 @@ function VideoPreparation({ episode, cloud, onUpdate }: {
       void start();
     }
   }, [cloud, episode.video_status, start]);
-  useEffect(() => {
-    if (episode.video_status !== "processing") return;
-    const timer = window.setInterval(() => {
-      api.episode(episode.id).then(onUpdate).catch((e: Error) => setError(e.message));
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [episode.id, episode.video_status, onUpdate]);
+  useJobPoll(episode.id, "video_status", episode.video_status === "processing", 2000, onUpdate, setError);
   const processing = episode.video_status === "processing";
   const failed = !!error || episode.video_status === "failed";
   return <div className="glass flex aspect-video flex-col items-center justify-center gap-3 rounded-3xl p-6 text-center">

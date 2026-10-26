@@ -80,6 +80,9 @@ export type EpisodeSummary = EpisodeBase & LearningProgress & {
   last_practiced_at: string | null; // 'YYYY-MM-DD HH:MM:SS' UTC
 };
 
+/** The background jobs' state, polled while one runs (GET /api/episodes/{id}/status). */
+export type EpisodeStatus = Pick<EpisodeBase, "status" | "status_detail" | "audio_status" | "audio_detail" | "video_status" | "video_detail">;
+
 export type EpisodeDetail = EpisodeBase & LearningProgress & {
   has_video: boolean;
   sentences: Sentence[];
@@ -343,6 +346,7 @@ export const api = {
   episodes: () => request<EpisodeSummary[]>("/api/episodes"),
   importEpisode: (url: string) => request<EpisodeDetail>("/api/episodes", { method: "POST", body: json({ url }) }),
   episode: (id: number) => request<EpisodeDetail>(`/api/episodes/${id}`),
+  episodeStatus: (id: number) => request<EpisodeStatus>(`/api/episodes/${id}/status`),
   savePosition: (id: number, sentence_id: number) => request<{ ok: boolean }>(`/api/episodes/${id}/position`, {
     method: "PUT", body: json({ sentence_id }), keepalive: true,
   }),
