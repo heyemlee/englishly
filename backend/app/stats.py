@@ -1,10 +1,9 @@
 """Progress numbers for the dashboard, and the 误听本 (what the learner keeps mishearing in dictation)."""
 
-import json
 import re
 import sqlite3
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter
 
@@ -28,15 +27,33 @@ def norm(word: str) -> str:
     return re.sub(r"[^a-z0-9']", "", word.lower().replace("’", "'"))
 
 
+# Where practice is recorded, and the UTC time column saying when (each one is indexed).
+ACTIVITY = (("attempts", "created_at"), ("reviews", "reviewed_at"), ("retells", "created_at"),
+            ("listening_events", "created_at"))
+
+
+def _utc(day: date) -> str:
+    """This local date's midnight as a UTC stamp, so the time columns can be compared (and their indexes used) as-is."""
+    return datetime.combine(day, time()).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def activity_days(conn: sqlite3.Connection) -> set[str]:
+    """Local dates with any practice. Hops from one practice day to the next with one index lookup each, instead of
+    reading every row (months of listening are hundreds of thousands of events)."""
     days = set()
-    for sql in (
-        "SELECT DISTINCT date(created_at, 'localtime') FROM attempts",
-        "SELECT DISTINCT date(reviewed_at, 'localtime') FROM reviews",
-        "SELECT DISTINCT date(created_at, 'localtime') FROM retells",
-        "SELECT DISTINCT date(created_at, 'localtime') FROM listening_events",
-    ):
-        days.update(r[0] for r in conn.execute(sql) if r[0])
+    for table, column in ACTIVITY:
+        after = ""
+        while row := conn.execute(
+            f"""SELECT date(t, 'localtime') AS d, datetime(date(t, 'localtime'), '+1 day', 'utc') AS next
+                  FROM (SELECT {column} AS t FROM {table} WHERE {column} >= ? ORDER BY {column} LIMIT 1)""",
+            (after,),
+        ).fetchone():
+            if row["d"] is None:  # a time SQLite can't read: take the rest of this table the slow way
+                days.update(r[0] for r in conn.execute(
+                    f"SELECT DISTINCT date({column}, 'localtime') FROM {table} WHERE {column} >= ?", (after,)) if r[0])
+                break
+            days.add(row["d"])
+            after = row["next"]
     return days
 
 
@@ -52,8 +69,8 @@ def streak(days: set[str], today: date) -> int:
 
 def _avg(conn: sqlite3.Connection, kind: str, start: date, end: date) -> float | None:
     row = conn.execute(
-        "SELECT AVG(score) FROM attempts WHERE kind = ? AND date(created_at, 'localtime') BETWEEN ? AND ?",
-        (kind, start.isoformat(), end.isoformat()),
+        "SELECT AVG(score) FROM attempts WHERE kind = ? AND created_at >= ? AND created_at < ?",
+        (kind, _utc(start), _utc(end + timedelta(days=1))),
     ).fetchone()
     return None if row[0] is None else round(row[0], 3)
 
@@ -62,6 +79,7 @@ def _avg(conn: sqlite3.Connection, kind: str, start: date, end: date) -> float |
 def stats():
     today = date.today()
     first = today - timedelta(days=DAYS - 1)
+    since = _utc(first)
     with connect() as conn:
         days = activity_days(conn)
 
@@ -71,50 +89,48 @@ def stats():
                  for i in range(DAYS)}
         for r in conn.execute(
             """SELECT date(created_at, 'localtime') AS d, kind, COUNT(*) AS n, AVG(score) AS avg
-                 FROM attempts WHERE date(created_at, 'localtime') >= ? GROUP BY d, kind""",
-            (first.isoformat(),),
+                 FROM attempts WHERE created_at >= ? GROUP BY d, kind""",
+            (since,),
         ):
             if r["d"] in daily:
                 daily[r["d"]][r["kind"]] = r["n"]
                 daily[r["d"]][f"{r['kind']}_avg"] = round(r["avg"], 3)
         for r in conn.execute(
             """SELECT date(created_at, 'localtime') AS d, COUNT(DISTINCT sentence_id) AS n
-                 FROM attempts WHERE date(created_at, 'localtime') >= ? GROUP BY d""",
-            (first.isoformat(),),
+                 FROM attempts WHERE created_at >= ? GROUP BY d""",
+            (since,),
         ):
             if r["d"] in daily:
                 daily[r["d"]]["sentences"] = r["n"]
         for r in conn.execute(
             """SELECT date(reviewed_at, 'localtime') AS d, COUNT(*) AS n
-                 FROM reviews WHERE date(reviewed_at, 'localtime') >= ? GROUP BY d""",
-            (first.isoformat(),),
+                 FROM reviews WHERE reviewed_at >= ? GROUP BY d""",
+            (since,),
         ):
             if r["d"] in daily:
                 daily[r["d"]]["reviews"] = r["n"]
 
         for r in conn.execute(
             """SELECT date(created_at, 'localtime') AS d, SUM(seconds) AS seconds
-               FROM listening_events WHERE date(created_at, 'localtime') >= ? GROUP BY d""", (first.isoformat(),),
+               FROM listening_events WHERE created_at >= ? GROUP BY d""", (since,),
         ):
             if r["d"] in daily:
                 daily[r["d"]]["listening_seconds"] = round(r["seconds"], 1)
 
-        mature = learning = 0
-        for r in conn.execute("SELECT fsrs, reps FROM cards"):
-            if r["reps"] == 0:
-                continue
-            stability = json.loads(r["fsrs"]).get("stability") or 0
-            if stability >= MATURE_DAYS:
-                mature += 1
-            else:
-                learning += 1
+        learning, mature = conn.execute(
+            """SELECT COUNT(CASE WHEN COALESCE(json_extract(fsrs, '$.stability'), 0) < ? THEN 1 END),
+                      COUNT(CASE WHEN COALESCE(json_extract(fsrs, '$.stability'), 0) >= ? THEN 1 END)
+                 FROM cards WHERE reps > 0""",
+            (MATURE_DAYS, MATURE_DAYS),
+        ).fetchone()
 
         def count(sql: str) -> int:
             return conn.execute(sql).fetchone()[0]
 
         totals = {
             "sentences_heard": count("SELECT COUNT(*) FROM sentence_listening WHERE heard = 1"),
-            "listening_seconds": round(conn.execute("SELECT COALESCE(SUM(seconds), 0) FROM listening_events").fetchone()[0], 1),
+            # The same total as summing every listening event: each event's seconds are added to its sentence's row.
+            "listening_seconds": round(conn.execute("SELECT COALESCE(SUM(seconds), 0) FROM sentence_listening").fetchone()[0], 1),
             "episodes": count("SELECT COUNT(*) FROM episodes WHERE status = 'ready'"),
             "sentences_practiced": count("SELECT COUNT(DISTINCT sentence_id) FROM attempts"),
             "dictations": count("SELECT COUNT(*) FROM attempts WHERE kind = 'dictation'"),

@@ -162,6 +162,8 @@ CREATE INDEX IF NOT EXISTS idx_cards_due ON cards(reps, due);
 CREATE INDEX IF NOT EXISTS idx_reviews_time ON reviews(reviewed_at);
 CREATE INDEX IF NOT EXISTS idx_annotations_sentence ON sentence_annotations(sentence_id);
 CREATE INDEX IF NOT EXISTS idx_listening_time ON listening_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_attempts_time ON attempts(created_at);  -- the dashboard's dates
+CREATE INDEX IF NOT EXISTS idx_retells_time ON retells(created_at);
 -- Deleting sentences (an episode, or re-cutting it) finds these rows through their foreign keys; without the indexes
 -- every deleted sentence scans the whole table, which took seconds once there was a few months of listening.
 CREATE INDEX IF NOT EXISTS idx_listening_sentence ON listening_events(sentence_id);
