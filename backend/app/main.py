@@ -67,6 +67,10 @@ class AttemptIn(BaseModel):
     details: dict | None = None
 
 
+class StarIn(BaseModel):
+    starred: bool
+
+
 class ChunkIn(BaseModel):
     """An expression the learner picked out of a sentence, with its meaning in their own words."""
 
@@ -187,6 +191,22 @@ def get_episode_status(episode_id: int):
     if not row:
         raise HTTPException(404, "找不到这个视频。")
     return dict(row)
+
+
+@app.put("/api/episodes/{episode_id}/star")
+def star_episode(episode_id: int, body: StarIn):
+    """Star an episode for the 学习记录 page's 已收藏 list. Starring again keeps the original time."""
+    with connect() as conn:
+        if body.starred:
+            cur = conn.execute(
+                "UPDATE episodes SET starred_at = COALESCE(starred_at, datetime('now')) WHERE id = ?", (episode_id,)
+            )
+        else:
+            cur = conn.execute("UPDATE episodes SET starred_at = NULL WHERE id = ?", (episode_id,))
+        if not cur.rowcount:
+            raise HTTPException(404, "找不到这个视频。")
+        row = conn.execute("SELECT starred_at FROM episodes WHERE id = ?", (episode_id,)).fetchone()
+    return {"starred_at": row["starred_at"]}
 
 
 @app.delete("/api/episodes/{episode_id}")

@@ -3,21 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { IconBook, IconCards, IconChart, IconMic, IconShows } from "@/components/icons";
+import { IconBook, IconCards, IconClock, IconMic, IconShows } from "@/components/icons";
 import { cx } from "@/components/ui";
 
+// `short` is the label under the icon in the phone tab bar.
 const NAV = [
-  { href: "/", label: "节目", Icon: IconShows },
-  { href: "/review", label: "复习", Icon: IconCards },
-  { href: "/retell", label: "复述", Icon: IconMic },
-  { href: "/chunks", label: "单词本", Icon: IconBook },
-  { href: "/stats", label: "数据", Icon: IconChart },
+  { href: "/", label: "节目", short: "节目", Icon: IconShows },
+  { href: "/review", label: "复习", short: "复习", Icon: IconCards },
+  { href: "/retell", label: "复述", short: "复述", Icon: IconMic },
+  { href: "/chunks", label: "单词本", short: "单词本", Icon: IconBook },
+  { href: "/history", label: "学习记录", short: "记录", Icon: IconClock },
 ] as const;
 
 function section(pathname: string | null) {
   if (!pathname) return null;
-  if (pathname === "/" || pathname.startsWith("/episode")) return "/";
-  if (pathname.startsWith("/practice")) return "/stats"; // the mishear drill belongs to the mishear book
+  if (pathname === "/" || pathname.startsWith("/episode") || pathname.startsWith("/practice")) return "/";
   return NAV.find((n) => n.href !== "/" && pathname.startsWith(n.href))?.href ?? null;
 }
 
@@ -55,7 +55,7 @@ export function TabBar() {
   return (
     <nav aria-label="主导航" className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] md:hidden">
       <div className="glass-strong mx-auto flex max-w-md rounded-full p-1">
-        {NAV.map(({ href, label, Icon }) => (
+        {NAV.map(({ href, short, Icon }) => (
           <Link
             key={href}
             href={href}
@@ -66,7 +66,7 @@ export function TabBar() {
             )}
           >
             <Icon className="size-[22px]" />
-            {label}
+            {short}
           </Link>
         ))}
       </div>

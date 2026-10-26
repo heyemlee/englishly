@@ -38,6 +38,8 @@ import {
   IconRepeat,
   IconReplay,
   IconSliders,
+  IconStar,
+  IconStarFilled,
   IconStop,
   IconTrash,
 } from "@/components/icons";
@@ -110,6 +112,43 @@ function BackButton() {
     >
       <IconChevronLeft className="size-5" />
     </Link>
+  );
+}
+
+/** Star the episode; starred ones are listed under 学习记录 → 已收藏. */
+function StarButton({ episode, onChange, onError }: {
+  episode: EpisodeDetail;
+  onChange: (starredAt: string | null) => void;
+  onError: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const starred = !!episode.starred_at;
+  const toggle = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      onChange((await api.starEpisode(episode.id, !starred)).starred_at);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onMouseDown={preventFocus}
+      onClick={() => void toggle()}
+      aria-pressed={starred}
+      aria-label={starred ? "取消收藏" : "收藏这一集"}
+      title={starred ? "取消收藏" : "收藏这一集"}
+      className={cx(
+        "glass grid size-10 shrink-0 place-items-center rounded-full transition-[background-color,color,transform] hover:bg-(--glass-strong) active:scale-95",
+        starred ? "text-foreground" : "text-muted",
+      )}
+    >
+      {starred ? <IconStarFilled className="size-5" /> : <IconStar className="size-5" />}
+    </button>
   );
 }
 
@@ -673,6 +712,7 @@ function PracticeView({
             {syncError && " · 收听记录同步中"}
           </p>
         </div>
+        <StarButton episode={episode} onChange={(starred_at) => setEpisode((ep) => ep && { ...ep, starred_at })} onError={setMessage} />
       </header>
 
       {notice && <p className="rounded-2xl bg-fill px-4 py-3 text-sm text-muted">{notice}</p>}

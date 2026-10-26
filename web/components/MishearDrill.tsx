@@ -26,7 +26,7 @@ export default function MishearDrill() {
   if (error) return <ErrorBar message={error} />;
   if (!items) return <p className="flex items-center gap-2 text-sm text-muted"><Spinner /> 正在准备</p>;
   if (!items.length) return <div className="mx-auto max-w-2xl space-y-6">
-    <Link href="/stats" className={BACK}><IconChevronLeft className="size-4" /> 误听本</Link>
+    <Link href="/" className={BACK}><IconChevronLeft className="size-4" /> 我的节目</Link>
     <Card pad="roomy" className="space-y-2 text-center">
       <h1 className="text-xl font-semibold tracking-tight">没有要重练的句子</h1>
       <p className="text-sm text-muted">{word ? `含「${word}」的句子都已经练对了。` : "听写里还有错的句子会出现在这里。"}</p>
@@ -51,14 +51,11 @@ function DrillSession({ questions, word }: { questions: MishearQuestion[]; word:
           </div>
         ))}
       </div>}
-      <div className="flex flex-wrap gap-2">
-        <Link href="/stats" className="inline-flex h-10 items-center rounded-full bg-foreground px-5 text-sm font-medium text-background">误听本</Link>
-        <Link href="/" className="inline-flex h-10 items-center rounded-full bg-fill px-5 text-sm font-medium hover:bg-fill-strong">我的节目</Link>
-      </div>
+      <Link href="/" className="inline-flex h-10 items-center rounded-full bg-foreground px-5 text-sm font-medium text-background">我的节目</Link>
     </div>;
   }
   return <div className="mx-auto max-w-2xl space-y-6">
-    <Link href="/stats" className={BACK}><IconChevronLeft className="size-4" /> 误听本</Link>
+    <Link href="/" className={BACK}><IconChevronLeft className="size-4" /> 我的节目</Link>
     <div className="space-y-3">
       <div className="flex items-end justify-between gap-3">
         <h1 className="text-[28px] font-semibold leading-tight tracking-tight sm:text-4xl">{word ? `「${word}」专项重练` : "误听重练"}</h1>

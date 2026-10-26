@@ -9,8 +9,8 @@ from .config import DB_PATH
 # 1: v0.1; 2: cards, phrases, conversations, retells; 3: settings; 4: podcasts; 5: card kinds;
 # 6: YouTube channels and audio; 7: AI features removed (phrases, conversations, AI notes and feedback);
 # 8: Chinese translations; 9: study annotations, clip lessons and listening progress; 10: manual notebook entries;
-# 11: locally playable video
-SCHEMA_VERSION = 11
+# 11: locally playable video; 12: starred episodes
+SCHEMA_VERSION = 12
 
 # One expression gives up to three cards ("siblings", same `note`): produce (see the meaning, say the English),
 # listen (hear the original sentence, get the meaning) and cloze (fill in the expression).
@@ -186,6 +186,7 @@ EPISODE_COLUMNS = {
     "audio_detail": "TEXT NOT NULL DEFAULT ''",
     "video_status": "TEXT NOT NULL DEFAULT ''",  # '' | processing | ready | failed
     "video_detail": "TEXT NOT NULL DEFAULT ''",
+    "starred_at": "TEXT",  # 'YYYY-MM-DD HH:MM:SS' UTC when the learner starred it, NULL when not starred
 }
 
 

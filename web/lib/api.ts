@@ -69,6 +69,7 @@ type EpisodeBase = {
   has_audio: boolean;
   video_status: "" | "processing" | "ready" | "failed";
   video_detail: string;
+  starred_at: string | null; // 'YYYY-MM-DD HH:MM:SS' UTC; null when not starred
 };
 
 export type EpisodeSummary = EpisodeBase & LearningProgress & {
@@ -233,56 +234,6 @@ export type PodcastFeed = {
   }[];
 };
 
-export type DailyStat = {
-  listening_seconds: number;
-  date: string;
-  dictation: number;
-  dictation_avg: number | null;
-  shadow: number;
-  shadow_avg: number | null;
-  reviews: number;
-  sentences: number;
-};
-
-export type Stats = {
-  streak: number;
-  active_days: number;
-  totals: {
-    listening_seconds: number;
-    sentences_heard: number;
-    episodes: number;
-    sentences_practiced: number;
-    dictations: number;
-    shadows: number;
-    cards: number;
-    cards_new: number;
-    cards_learning: number;
-    cards_mature: number;
-    reviews: number;
-    retells: number;
-  };
-  recent: { dictation: number | null; dictation_prev: number | null; shadow: number | null; shadow_prev: number | null };
-  daily: DailyStat[];
-  retells: { id: number; created_at: string; title: string | null; wpm: number[]; pauses: number[] }[];
-};
-
-export type MishearExample = { sentence: string; got: string | null; episode_id: number; sentence_idx: number; title: string };
-
-export type Mishears = {
-  total: number;
-  attempts: number;
-  function_share: number | null;
-  top: {
-    word: string;
-    count: number;
-    missed: number;
-    function_word: boolean;
-    heard_as: { text: string; count: number }[];
-    examples: MishearExample[];
-  }[];
-  recent: (MishearExample & { expected: string; created_at: string })[];
-};
-
 export type MishearQuestion = {
   sentence_id: number;
   sentence_idx: number;
@@ -347,6 +298,8 @@ export const api = {
   importEpisode: (url: string) => request<EpisodeDetail>("/api/episodes", { method: "POST", body: json({ url }) }),
   episode: (id: number) => request<EpisodeDetail>(`/api/episodes/${id}`),
   episodeStatus: (id: number) => request<EpisodeStatus>(`/api/episodes/${id}/status`),
+  starEpisode: (id: number, starred: boolean) =>
+    request<{ starred_at: string | null }>(`/api/episodes/${id}/star`, { method: "PUT", body: json({ starred }) }),
   savePosition: (id: number, sentence_id: number) => request<{ ok: boolean }>(`/api/episodes/${id}/position`, {
     method: "PUT", body: json({ sentence_id }), keepalive: true,
   }),
@@ -376,8 +329,6 @@ export const api = {
   deleteCard: (id: number) => request<{ ok: boolean }>(`/api/cards/${id}`, { method: "DELETE" }),
 
   retells: () => request<Retell[]>("/api/retells"),
-  stats: () => request<Stats>("/api/stats"),
-  mishears: () => request<Mishears>("/api/mishears"),
   mishearPractice: (word = "") => request<{ items: MishearQuestion[] }>(`/api/mishears/practice?word=${encodeURIComponent(word)}`),
   saveRetell: (body: { episode_id?: number | null; clip_idx?: number | null; topic?: string; rounds: RetellRound[] }) =>
     request<Retell>("/api/retells", { method: "POST", body: json(body) }),

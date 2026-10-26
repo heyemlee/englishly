@@ -100,3 +100,28 @@ def test_health(client):
     health = client.get("/api/health").json()
     assert set(health) == {"ok", "cloud", "login", "whisper"}
     assert health["cloud"] is False and health["login"] is False  # on the Mac: no password, importing on
+
+
+def test_star_episode(client):
+    ep = client.post("/api/episodes", json={"url": "arj7oStGLkU"}).json()
+    assert ep["starred_at"] is None
+    starred = client.put(f"/api/episodes/{ep['id']}/star", json={"starred": True}).json()["starred_at"]
+    assert starred
+    assert client.get(f"/api/episodes/{ep['id']}").json()["starred_at"] == starred
+    assert client.get("/api/episodes").json()[0]["starred_at"] == starred
+    # Starring again keeps the original time, so 已收藏 stays in the order things were starred.
+    assert client.put(f"/api/episodes/{ep['id']}/star", json={"starred": True}).json()["starred_at"] == starred
+    assert client.put(f"/api/episodes/{ep['id']}/star", json={"starred": False}).json()["starred_at"] is None
+    assert client.get("/api/episodes").json()[0]["starred_at"] is None
+    assert client.put("/api/episodes/999/star", json={"starred": True}).status_code == 404
+
+
+def test_upgrade_adds_starred_column(client):
+    client.post("/api/episodes", json={"url": "arj7oStGLkU"})
+    with app.db.connect() as conn:  # back to a v11 database
+        conn.execute("ALTER TABLE episodes DROP COLUMN starred_at")
+        conn.execute("PRAGMA user_version = 11")
+    assert app.db.init_db() == 11
+    with app.db.connect() as conn:
+        assert conn.execute("SELECT starred_at FROM episodes").fetchone()["starred_at"] is None
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == app.db.SCHEMA_VERSION

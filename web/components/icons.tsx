@@ -59,6 +59,15 @@ export const IconChart = (p: IconProps) => (
     <path d="M5 20v-6M12 20V5M19 20v-9M3 20h18" />
   </Svg>
 );
+const STAR = "M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.6L12 16.5l-5.1 2.7 1-5.6-4.1-4 5.7-.8z";
+export const IconStar = (p: IconProps) => <Svg {...p}><path d={STAR} /></Svg>;
+export const IconStarFilled = (p: IconProps) => <Svg {...p} filled><path d={STAR} /></Svg>;
+export const IconClock = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Svg>
+);
 export const IconTarget = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="8.5" />
