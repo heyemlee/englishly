@@ -1,0 +1,27 @@
+{
+  "name": "PodEcho 播客精听",
+  "short_name": "PodEcho",
+  "description": "用 YouTube 和播客逐句练英语听力和口语。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f6",
+  "theme_color": "#f5f5f6",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
