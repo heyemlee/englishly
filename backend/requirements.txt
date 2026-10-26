@@ -1,0 +1,15 @@
+fastapi==0.161.1
+uvicorn[standard]==0.54.0
+youtube-transcript-api==1.2.4  # fallback for captions when yt-dlp breaks
+# Captions with word times, channel lists and audio. Not pinned: YouTube changes often, so update it about monthly.
+yt-dlp[default]>=2026.10.21
+python-dotenv==1.2.4
+fsrs==6.3.2
+httpx==0.28.1
+defusedxml==0.7.1
+numpy==2.5.4
+imageio-ffmpeg==0.6.0  # bundled ffmpeg, used when there's no system ffmpeg
+mlx-whisper==0.4.3; sys_platform == "darwin" and platform_machine == "arm64"  # podcast transcription (Apple Silicon)
+
+# tests
+pytest==9.1.1
