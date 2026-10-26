@@ -120,13 +120,13 @@
   }
 }
 
+/* Cards in the page flow. Only the fixed backdrop is behind them, and it is too soft for a blur to show, so they don't
+   blur: on phones every blurred card had to be blurred again on every frame of scrolling. */
 @utility glass {
   background-color: var(--glass);
   background-image: var(--glass-sheen);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(22px) saturate(170%);
-  backdrop-filter: blur(22px) saturate(170%);
 }
 
 /* Bars and controls that float over content. */
@@ -274,4 +274,3 @@ button.study-highlight:focus-visible { outline: 2px solid var(--foreground); out
     scroll-behavior: auto !important;
   }
 }
-

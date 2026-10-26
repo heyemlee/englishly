@@ -193,10 +193,10 @@ export default function Home() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={thumbnail(ep) ?? undefined} alt="" loading="lazy" className="aspect-video w-full bg-fill object-cover" />
                     {ep.source === "podcast" && (
-                      <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">播客</span>
+                      <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">播客</span>
                     )}
                     {ep.status === "ready" && (
-                      <span className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-md">
+                      <span className="absolute bottom-2 right-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium tabular-nums text-white">
                         {formatTime(ep.duration)}
                       </span>
                     )}

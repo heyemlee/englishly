@@ -308,7 +308,8 @@ export function Card({ children, className, pad = "normal" }: { children: ReactN
 
 export function PageTitle({ title, subtitle, action }: { title: string; subtitle?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex items-end justify-between gap-4">
+    // Wraps the action under the title when both don't fit, instead of squeezing the title onto two lines.
+    <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
       <div className="min-w-0">
         <h1 className="text-[28px] font-semibold leading-tight tracking-tight sm:text-4xl">{title}</h1>
         {subtitle && <p className="mt-1.5 text-sm text-muted">{subtitle}</p>}
