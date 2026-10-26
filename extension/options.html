@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PodEcho 插件设置</title>
+    <style>
+      body { font: 14px/1.5 -apple-system, "PingFang SC", "Segoe UI", sans-serif; margin: 0; padding: 16px; min-width: 320px;
+        color: #1c1917; background: #fafaf9; }
+      h1 { font-size: 16px; margin: 0 0 8px; }
+      p { color: #78716c; margin: 4px 0 12px; }
+      input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d6d3d1; border-radius: 8px; font: inherit; }
+      .row { display: flex; gap: 8px; margin-top: 10px; }
+      button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid #0f766e; background: #0f766e; color: #fff; cursor: pointer; }
+      button.secondary { background: #fff; color: #0f766e; }
+      #status { margin-top: 10px; min-height: 1.5em; }
+      .ok { color: #15803d; } .bad { color: #b91c1c; }
+      @media (prefers-color-scheme: dark) {
+        body { color: #f5f5f4; background: #1c1917; } input { background: #0c0a09; color: inherit; border-color: #44403c; }
+        button.secondary { background: transparent; color: #5eead4; border-color: #5eead4; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PodEcho 插件设置</h1>
+    <p>PodEcho 打开的地址（就是你在浏览器里用 PodEcho 的那个地址）。默认是本机常驻服务的 http://localhost:8811。</p>
+    <input id="url" placeholder="http://localhost:8811" />
+    <p>访问密码：PodEcho 设了访问密码时才要填，一般不用填。</p>
+    <input id="password" type="password" placeholder="访问密码（可不填）" autocomplete="off" />
+    <div class="row">
+      <button id="save">保存并测试</button>
+      <button id="open" class="secondary">打开 PodEcho</button>
+    </div>
+    <div id="status"></div>
+    <script src="options.js"></script>
+  </body>
+</html>
