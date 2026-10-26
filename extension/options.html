@@ -5,28 +5,61 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>PodEcho 插件设置</title>
     <style>
-      body { font: 14px/1.5 -apple-system, "PingFang SC", "Segoe UI", sans-serif; margin: 0; padding: 16px; min-width: 320px;
-        color: #1c1917; background: #fafaf9; }
-      h1 { font-size: 16px; margin: 0 0 8px; }
-      p { color: #78716c; margin: 4px 0 12px; }
-      input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #d6d3d1; border-radius: 8px; font: inherit; }
-      .row { display: flex; gap: 8px; margin-top: 10px; }
-      button { font: inherit; padding: 6px 12px; border-radius: 8px; border: 1px solid #0f766e; background: #0f766e; color: #fff; cursor: pointer; }
-      button.secondary { background: #fff; color: #0f766e; }
-      #status { margin-top: 10px; min-height: 1.5em; }
-      .ok { color: #15803d; } .bad { color: #b91c1c; }
-      @media (prefers-color-scheme: dark) {
-        body { color: #f5f5f4; background: #1c1917; } input { background: #0c0a09; color: inherit; border-color: #44403c; }
-        button.secondary { background: transparent; color: #5eead4; border-color: #5eead4; }
+      /* Black and white like the web app; follows the browser's light or dark mode. */
+      :root {
+        --bg: #f5f5f6; --text: #0d0d0d; --muted: #666667; --subtle: #9b9b9c; --fill: rgba(0, 0, 0, 0.05);
+        --fill-strong: rgba(0, 0, 0, 0.09); --surface: #fff; --border: rgba(0, 0, 0, 0.08);
+        --primary: #0d0d0d; --on-primary: #fff; --good: #1a7f37; --bad: #d1242f;
+        color-scheme: light;
       }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #050505; --text: #ededed; --muted: #9f9fa0; --subtle: #6c6c6e; --fill: rgba(255, 255, 255, 0.08);
+          --fill-strong: rgba(255, 255, 255, 0.14); --surface: #1c1c1e; --border: rgba(255, 255, 255, 0.1);
+          --primary: #ededed; --on-primary: #0d0d0d; --good: #3fb950; --bad: #ff6b61;
+          color-scheme: dark;
+        }
+      }
+      body { margin: 0; padding: 20px; min-width: 320px; box-sizing: border-box; color: var(--text); background: var(--bg);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased; }
+      header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+      .logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--primary); color: var(--on-primary); }
+      .logo svg { width: 17px; height: 17px; }
+      h1 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+      label { display: block; margin-bottom: 12px; color: var(--muted); font-size: 12px; }
+      input { display: block; box-sizing: border-box; width: 100%; height: 40px; margin-top: 6px; padding: 0 14px;
+        border: 1px solid transparent; border-radius: 999px; outline: none; color: var(--text); background: var(--fill); font: inherit;
+        transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s; }
+      input::placeholder { color: var(--subtle); }
+      input:focus { background: var(--surface); border-color: color-mix(in srgb, var(--text) 22%, transparent); box-shadow: 0 0 0 4px var(--fill); }
+      .row { display: flex; gap: 8px; margin-top: 18px; }
+      button { flex: 1; height: 40px; padding: 0 16px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 500;
+        color: var(--on-primary); background: var(--primary); transition: opacity 0.15s, background-color 0.15s, transform 0.1s; }
+      button:hover { opacity: 0.85; }
+      button:active { transform: scale(0.97); }
+      button.secondary { color: var(--text); background: var(--fill); }
+      button.secondary:hover { opacity: 1; background: var(--fill-strong); }
+      button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+      #status { min-height: 1.5em; margin-top: 12px; color: var(--muted); font-size: 13px; }
+      .ok { color: var(--good) !important; } .bad { color: var(--bad) !important; }
     </style>
   </head>
   <body>
-    <h1>PodEcho 插件设置</h1>
-    <p>PodEcho 打开的地址（就是你在浏览器里用 PodEcho 的那个地址）。默认是本机常驻服务的 http://localhost:8811。</p>
-    <input id="url" placeholder="http://localhost:8811" />
-    <p>访问密码：PodEcho 设了访问密码时才要填，一般不用填。</p>
-    <input id="password" type="password" placeholder="访问密码（可不填）" autocomplete="off" />
+    <header>
+      <span class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 10.5v3M8 7.5v9M12 4.5v15M16 7.5v9M20 10.5v3" />
+        </svg>
+      </span>
+      <h1>PodEcho 插件设置</h1>
+    </header>
+    <label>PodEcho 地址
+      <input id="url" placeholder="http://localhost:8811" title="你在浏览器里打开 PodEcho 的地址，默认是本机的 http://localhost:8811" />
+    </label>
+    <label>访问密码
+      <input id="password" type="password" placeholder="没设密码就不用填" autocomplete="off" />
+    </label>
     <div class="row">
       <button id="save">保存并测试</button>
       <button id="open" class="secondary">打开 PodEcho</button>

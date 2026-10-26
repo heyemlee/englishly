@@ -17,50 +17,107 @@
   const host = document.createElement("div");
   host.id = "podecho-root";
   const root = host.attachShadow({ mode: "open" });
+  // Black and white liquid glass like the web app; colours follow YouTube's light or dark theme (syncTheme below).
+  const icon = (d, fill) =>
+    `<svg viewBox="0 0 24 24" aria-hidden="true" fill="${fill ? "currentColor" : "none"}" stroke="${fill ? "none" : "currentColor"}"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const ICON = {
+    prev: icon('<path d="M18 6.2v11.6a.8.8 0 0 1-1.25.66l-8.4-5.8a.8.8 0 0 1 0-1.32l8.4-5.8A.8.8 0 0 1 18 6.2z"/><rect x="5" y="5.5" width="2.2" height="13" rx="1.1"/>', true),
+    next: icon('<path d="M6 6.2v11.6a.8.8 0 0 0 1.25.66l8.4-5.8a.8.8 0 0 0 0-1.32l-8.4-5.8A.8.8 0 0 0 6 6.2z"/><rect x="16.8" y="5.5" width="2.2" height="13" rx="1.1"/>', true),
+    replay: icon('<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/>'),
+    chevron: icon('<path d="m6 9 6 6 6-6"/>'),
+    wave: icon('<path d="M4 10.5v3M8 7.5v9M12 4.5v15M16 7.5v9M20 10.5v3" stroke-width="2.4"/>'),
+  };
   root.innerHTML = `
     <style>
       :host { all: initial; }
-      .panel { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 340px; max-width: calc(100vw - 32px);
-        background: rgba(28, 25, 23, 0.94); color: #f5f5f4; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
-        font: 14px/1.45 -apple-system, "PingFang SC", "Segoe UI", sans-serif; }
-      .head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: default; }
-      .brand { font-weight: 600; } .pos { color: #a8a29e; font-size: 12px; flex: 1; }
-      .body { padding: 0 12px 12px; display: grid; gap: 8px; }
+      .panel {
+        --text: #0d0d0d; --muted: #666667; --subtle: #9b9b9c; --fill: rgba(0, 0, 0, 0.05); --fill-strong: rgba(0, 0, 0, 0.09);
+        --glass: rgba(255, 255, 255, 0.72); --sheen: rgba(255, 255, 255, 0.55); --border: rgba(0, 0, 0, 0.08);
+        --rim: rgba(255, 255, 255, 0.9); --primary: #0d0d0d; --on-primary: #fff; --bad: #d1242f;
+        position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; box-sizing: border-box;
+        width: 360px; max-width: calc(100vw - 32px); color: var(--text);
+        background: linear-gradient(150deg, var(--sheen), transparent 45%), var(--glass);
+        border: 1px solid var(--border); border-radius: 24px;
+        box-shadow: inset 0 1px 0 var(--rim), 0 2px 6px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.3);
+        -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .panel.dark {
+        --text: #ededed; --muted: #9f9fa0; --subtle: #6c6c6e; --fill: rgba(255, 255, 255, 0.08); --fill-strong: rgba(255, 255, 255, 0.14);
+        --glass: rgba(30, 30, 32, 0.72); --sheen: rgba(255, 255, 255, 0.07); --border: rgba(255, 255, 255, 0.1);
+        --rim: rgba(255, 255, 255, 0.08); --primary: #ededed; --on-primary: #0d0d0d; --bad: #ff6b61;
+      }
+      .panel.collapsed { width: auto; border-radius: 999px; }
+      .head { display: flex; align-items: center; gap: 8px; padding: 9px 9px 9px 12px; }
+      .logo { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 8px;
+        background: var(--primary); color: var(--on-primary); }
+      .logo svg { width: 15px; height: 15px; }
+      .brand { font-weight: 600; letter-spacing: -0.01em; }
+      .pos { flex: 1; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .body { display: grid; gap: 12px; padding: 2px 14px 14px; }
       .collapsed .body { display: none; }
-      .sentence { font-size: 17px; min-height: 1.45em; }
-      .masked { color: #78716c; letter-spacing: 1px; }
-      .msg { color: #d6d3d1; font-size: 13px; } .error { color: #fca5a5; }
+      .collapsed [data-act="collapse"] svg { transform: rotate(180deg); }
+      .sentence { font-size: 17px; line-height: 1.5; min-height: 1.5em; letter-spacing: -0.005em; }
+      .masked { color: var(--subtle); }
+      .msg { color: var(--muted); font-size: 13px; } .error { color: var(--bad); }
       .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-      button { font: inherit; font-size: 13px; color: #f5f5f4; background: #292524; border: 1px solid #44403c;
-        border-radius: 8px; padding: 4px 10px; cursor: pointer; }
-      button:hover { border-color: #2dd4bf; } button.primary { background: #0f766e; border-color: #0f766e; }
-      button.icon { padding: 0 8px; background: transparent; border: none; color: #a8a29e; font-size: 16px; }
-      label { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: #d6d3d1; cursor: pointer; }
-      kbd { font: 11px ui-monospace, Menlo, monospace; opacity: .6; border: 1px solid currentColor; border-radius: 4px; padding: 0 3px; }
-      a { color: #5eead4; font-size: 12px; cursor: pointer; text-decoration: underline; }
+      button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box;
+        height: 32px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
+        font: inherit; font-size: 13px; font-weight: 500; color: var(--text); background: var(--fill);
+        transition: background-color 0.15s, opacity 0.15s, transform 0.1s; }
+      button:hover { background: var(--fill-strong); }
+      button:active { transform: scale(0.97); }
+      button.primary { background: var(--primary); color: var(--on-primary); }
+      button.primary:hover { opacity: 0.85; }
+      button svg { width: 16px; height: 16px; flex: none; }
+      .controls { display: flex; gap: 6px; }
+      .controls button { height: 40px; }
+      .controls .round { width: 40px; padding: 0; }
+      .controls .primary { flex: 1; font-size: 14px; }
+      .ghost { width: 30px; height: 30px; padding: 0; background: transparent; color: var(--muted); }
+      .ghost:hover { background: var(--fill); color: var(--text); }
+      .chips label { position: relative; display: inline-flex; align-items: center; height: 28px; padding: 0 12px;
+        border-radius: 999px; background: var(--fill); color: var(--muted); font-size: 12px; font-weight: 500;
+        cursor: pointer; user-select: none; transition: background-color 0.15s, color 0.15s; }
+      .chips label:hover { color: var(--text); }
+      .chips label:has(input:checked) { background: var(--primary); color: var(--on-primary); }
+      .chips label:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+      .chips input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+      .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      a { color: var(--text); font-size: 12px; font-weight: 500; cursor: pointer; text-decoration: none; }
+      a:hover { text-decoration: underline; text-underline-offset: 3px; }
+      .keys { display: flex; gap: 3px; color: var(--subtle); }
+      kbd { font: 10px/1 ui-monospace, Menlo, monospace; border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px; }
+      button:focus-visible, a:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
       [hidden] { display: none !important; }
     </style>
     <div class="panel" hidden>
       <div class="head">
+        <span class="logo">${ICON.wave}</span>
         <span class="brand">PodEcho</span><span class="pos"></span>
-        <button class="icon" data-act="collapse" title="收起/展开">–</button>
+        <button class="ghost" data-act="collapse" title="收起" aria-label="收起">${ICON.chevron}</button>
       </div>
       <div class="body">
         <div class="msg"></div>
         <div class="row" data-part="setup" hidden></div>
         <div data-part="practice" hidden>
           <div class="sentence"></div>
-          <div class="row" style="margin-top:8px">
-            <button data-act="prev">◀ 上一句 <kbd>A</kbd></button>
-            <button data-act="replay" class="primary">⟲ 重播 <kbd>S</kbd></button>
-            <button data-act="next">下一句 ▶ <kbd>D</kbd></button>
+          <div class="controls" style="margin-top:12px">
+            <button class="round" data-act="prev" title="上一句（A）" aria-label="上一句">${ICON.prev}</button>
+            <button class="primary" data-act="replay" title="重播（S）">${ICON.replay}重播</button>
+            <button class="round" data-act="next" title="下一句（D）" aria-label="下一句">${ICON.next}</button>
           </div>
-          <div class="row" style="margin-top:8px">
-            <label><input type="checkbox" data-opt="loop">单句循环 <kbd>R</kbd></label>
+          <div class="row chips" style="margin-top:12px">
+            <label title="单句循环（R）"><input type="checkbox" data-opt="loop">单句循环</label>
             <label><input type="checkbox" data-opt="autoPause">每句后暂停</label>
             <label><input type="checkbox" data-opt="showText">字幕</label>
           </div>
-          <div style="margin-top:8px"><a data-act="practice">在 PodEcho 里练这句（听写、跟读、收藏表达）</a></div>
+          <div class="foot" style="margin-top:12px">
+            <a data-act="practice" title="听写、跟读、收藏表达">在 PodEcho 里练这句 →</a>
+            <span class="keys" title="A 上一句 · S 重播 · D 下一句 · R 单句循环"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>R</kbd></span>
+          </div>
         </div>
       </div>
     </div>`;
@@ -71,6 +128,11 @@
   const msg = $(".msg");
   const setup = $('[data-part="setup"]');
   const practice = $('[data-part="practice"]');
+
+  // YouTube marks its dark theme with a `dark` attribute on <html>.
+  const syncTheme = () => panel.classList.toggle("dark", document.documentElement.hasAttribute("dark"));
+  new MutationObserver(syncTheme).observe(document.documentElement, { attributes: true, attributeFilter: ["dark"] });
+  syncTheme();
 
   function show(message, { error = false, buttons = [] } = {}) {
     msg.textContent = message;
@@ -113,7 +175,9 @@
   function setCollapsed(collapsed) {
     state.collapsed = collapsed;
     panel.classList.toggle("collapsed", collapsed);
-    $('[data-act="collapse"]').textContent = collapsed ? "+" : "–";
+    const toggle = $('[data-act="collapse"]');
+    toggle.title = collapsed ? "展开" : "收起";
+    toggle.setAttribute("aria-label", toggle.title);
     saveOptions();
   }
 
@@ -141,7 +205,7 @@
       state.episode = res.data;
       renderSentence();
     } else if (res?.status === 404) {
-      show("这个视频还没导入 PodEcho。", { buttons: [["导入，开始逐句练", importVideo, true]] });
+      show("这个视频还没导入 PodEcho。", { buttons: [["导入，逐句练", importVideo, true]] });
     } else if (res?.status === 401) {
       show("PodEcho 需要访问密码：在插件设置里填上。", {
         error: true,
@@ -164,7 +228,7 @@
 
   async function importVideo() {
     const id = state.videoId;
-    show("导入中…一般几秒钟。");
+    show("导入中…");
     const res = await api("/api/episodes", "POST", { url: id });
     if (state.videoId !== id) return;
     if (res?.ok) {
