@@ -1,0 +1,131 @@
+#!/bin/bash
+# One command (or double-click PodEcho.command) to run PodEcho in the background on this Mac, as a launchd agent:
+# it keeps running after you close the terminal, starts again when you log in, and restarts if it crashes.
+# The backend serves the API and the built web pages on one port, which is all `tailscale serve` needs.
+#
+#   bin/podecho start       start it (setting it up the first time) and open it in the browser
+#   bin/podecho stop        stop it until you start it again or log in next time
+#   bin/podecho update      after code changes: rebuild the pages and restart
+#   bin/podecho restart     restart the backend (enough after backend-only changes)
+#   bin/podecho status      is it running?
+#   bin/podecho logs        follow its log
+#   bin/podecho uninstall   stop it and don't start it at login any more
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LABEL="com.podecho.server"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LOG="$HOME/Library/Logs/podecho.log"
+PORT=8811
+URL="http://localhost:$PORT"
+DOMAIN="gui/$(id -u)"
+
+loaded() { launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; }
+
+build() {
+  echo "打包网页（web/out）…"
+  npm --prefix "$ROOT/web" run --silent build:static
+}
+
+wait_ready() {
+  for _ in $(seq 1 60); do
+    if curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null; then
+      echo "PodEcho 在运行：$URL"
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "没等到 PodEcho 启动，看看日志：bin/podecho logs" >&2
+  return 1
+}
+
+stop() {
+  loaded || return 0
+  launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+  for _ in $(seq 1 20); do loaded || return 0; sleep 0.25; done
+}
+
+write_plist() {
+  # yt-dlp runs YouTube's player script with Node.js, so the service needs to find it.
+  local node_dir
+  node_dir="$(dirname "$(command -v node || echo /opt/homebrew/bin/node)")"
+  mkdir -p "$(dirname "$PLIST")" "$(dirname "$LOG")"
+  cat > "$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$ROOT/backend/.venv/bin/uvicorn</string>
+    <string>app.main:app</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>$PORT</string>
+    <string>--no-access-log</string>
+  </array>
+  <key>WorkingDirectory</key><string>$ROOT/backend</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>$node_dir:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>StandardOutPath</key><string>$LOG</string>
+  <key>StandardErrorPath</key><string>$LOG</string>
+</dict>
+</plist>
+EOF
+}
+
+start() {
+  if loaded; then
+    curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null || wait_ready
+  else
+    if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "端口 $PORT 已经有程序在用（多半是终端里开着的后端）：先在那个终端按 Ctrl+C 关掉，再启动一次。" >&2
+      exit 1
+    fi
+    [ -f "$ROOT/web/out/index.html" ] || build
+    write_plist
+    launchctl bootstrap "$DOMAIN" "$PLIST"
+    wait_ready
+    echo "以后登录 Mac 时会自动启动。手机上用：Mac 打开 Tailscale，再运行 tailscale serve --bg $PORT"
+  fi
+  [ -n "${PODECHO_NO_OPEN:-}" ] || open "$URL"  # PODECHO_NO_OPEN=1: don't open the browser
+}
+
+restart() {
+  if ! loaded; then
+    start
+    return
+  fi
+  launchctl kickstart -k "$DOMAIN/$LABEL"
+  wait_ready
+}
+
+status() {
+  if ! loaded; then
+    echo "没在运行。启动：bin/podecho start"
+    return 0
+  fi
+  launchctl print "$DOMAIN/$LABEL" | grep -E $'^\t(state|pid|last exit code) =' || true  # the job's own lines only
+  if curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null; then
+    echo "接口正常：$URL"
+  else
+    echo "接口没有响应，看看日志：bin/podecho logs"
+  fi
+}
+
+case "${1:-}" in
+  start) start ;;
+  stop) stop; echo "已停止。再启动：bin/podecho start（下次登录也会自动启动）" ;;
+  update) build; if loaded; then restart; fi ;;
+  restart) restart ;;
+  status) status ;;
+  logs) touch "$LOG"; tail -n 50 -f "$LOG" ;;
+  uninstall) stop; rm -f "$PLIST"; echo "已停止，登录时也不再自动启动。" ;;
+  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac
