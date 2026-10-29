@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 
-import { api, episodeHref, type SavedChunk } from "@/lib/api";
+import { api, episodeHref, type ChunkState, type SavedChunk } from "@/lib/api";
 import ChunkAudio from "@/components/ChunkAudio";
 import AddNotebookEntry from "@/components/AddNotebookEntry";
 import { IconCheck, IconPlay, IconPlus, IconSearch, IconTrash, IconX } from "@/components/icons";
@@ -11,6 +11,7 @@ import { Btn, Card, cx, ErrorBar, PageTitle, SpeakButton, Spinner } from "@/comp
 
 const SELECT = "field h-11 max-w-[60vw] shrink-0 truncate rounded-full pl-4 sm:h-10 sm:max-w-64";
 const TAG = "rounded-full px-2 py-0.5";
+const WAITING = "补上中文释义后自动加入复习";
 
 export default function ChunksPage() {
   const [chunks, setChunks] = useState<SavedChunk[] | null>(null);
@@ -51,15 +52,17 @@ export default function ChunksPage() {
     setError(null);
     try {
       const updated = await api.updateChunk(editing, meaning.trim());
+      const joined = updated.in_review && !chunks?.find((c) => c.id === editing)?.in_review;
       setChunks((list) => list?.map((c) => c.id === editing ? { ...c, ...updated } : c) ?? null);
       setEditing(null);
+      if (joined) setNotice("已加入复习");
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
 
-  function added(review: boolean) {
+  function added(entry: ChunkState) {
     setAdding(false);
-    setNotice(review ? "已保存并加入复习" : "已保存");
+    setNotice(entry.in_review ? "已保存并加入复习" : entry.review_pending ? `已保存，${WAITING}` : "已保存");
     setQuery(""); setSource("all"); setReviewFilter("all");
     void api.chunks().then(setChunks).catch((e: Error) => setError(`词条已保存，刷新列表失败：${e.message}`));
   }
@@ -68,9 +71,9 @@ export default function ChunksPage() {
     if (enrolling !== null) return;
     setEnrolling(id); setError(null);
     try {
-      await api.enrollChunk(id);
-      setChunks((list) => list?.map((c) => c.id === id ? { ...c, in_review: true } : c) ?? null);
-      setNotice("已加入复习");
+      const updated = await api.enrollChunk(id);
+      setChunks((list) => list?.map((c) => c.id === id ? { ...c, ...updated } : c) ?? null);
+      setNotice(updated.in_review ? "已加入复习" : WAITING);
     } catch (e) { setError((e as Error).message); }
     finally { setEnrolling(null); }
   }
@@ -145,7 +148,7 @@ export default function ChunksPage() {
                     </div>
                   </div>
                 ) : (
-                  <p className="mt-0.5 text-[15px]">{c.meaning_zh}</p>
+                  <p className={cx("mt-0.5 text-[15px]", !c.meaning_zh && "text-subtle")}>{c.meaning_zh || "暂无释义"}</p>
                 )}
               </div>
               <button onClick={() => remove(c.id)} aria-label={`删除「${c.pattern}」`} title="删除"
@@ -154,7 +157,9 @@ export default function ChunksPage() {
               </button>
             </div>
             <div className="flex flex-wrap gap-1.5 text-xs">
-              <span className={cx(TAG, c.in_review ? "bg-fill text-muted" : "border border-border text-subtle")}>{c.in_review ? "复习中" : "仅记录"}</span>
+              <span className={cx(TAG, c.in_review ? "bg-fill text-muted" : "border border-border text-subtle")} title={c.review_pending ? WAITING : undefined}>
+                {c.in_review ? "复习中" : c.review_pending ? "待加入复习" : "仅记录"}
+              </span>
               {c.entry_source === "manual" && <span className={cx(TAG, "bg-fill text-muted")}>手动</span>}
               {c.source_label && <span className={cx(TAG, "bg-fill text-muted")}>{c.source_label}</span>}
             </div>
@@ -174,8 +179,8 @@ export default function ChunksPage() {
                 {c.episode_id !== null && c.start_s !== null && c.end_s !== null && (
                   <Btn small onClick={() => setPlaying(c)}><IconPlay className="size-3" /> 听原句</Btn>
                 )}
-                {!c.in_review && <Btn small primary disabled={enrolling !== null} onClick={() => void enroll(c.id)}>{enrolling === c.id ? "加入中…" : "加入复习"}</Btn>}
-                <Btn small disabled={busy} onClick={() => { setEditing(c.id); setMeaning(c.meaning_zh); }}>修改释义</Btn>
+                {!c.in_review && !c.review_pending && <Btn small primary disabled={enrolling !== null} onClick={() => void enroll(c.id)}>{enrolling === c.id ? "加入中…" : "加入复习"}</Btn>}
+                <Btn small disabled={busy} onClick={() => { setEditing(c.id); setMeaning(c.meaning_zh); }}>{c.meaning_zh ? "修改释义" : "补充释义"}</Btn>
               </div>
             )}
           </li>

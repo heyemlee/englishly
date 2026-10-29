@@ -77,8 +77,7 @@ def test_duplicate_and_whitespace_validation_is_atomic(client):
     assert manual(client).status_code == 200
     assert manual(client, pattern="Come Across").status_code == 409
     assert manual(client, meaning_zh="给人以某种印象").status_code == 200  # another sense is a separate entry
-    for patch in ({"pattern": "   "}, {"meaning_zh": "\n  "}):
-        assert manual(client, **patch).status_code == 400
+    assert manual(client, pattern="   ").status_code == 400
     assert manual(client, pattern="a" * 201).status_code == 422
     assert len(client.get("/api/chunks").json()) == 2
     assert client.post("/api/chunks/999/review").status_code == 404
@@ -125,3 +124,47 @@ def test_v9_migration_preserves_existing_cards_and_reviews(client):
         assert [tuple(r) for r in conn.execute("SELECT * FROM cards ORDER BY id")] == before
         assert conn.execute("SELECT COUNT(*) FROM reviews").fetchone()[0] == 1
         assert conn.execute("PRAGMA user_version").fetchone()[0] == app.db.SCHEMA_VERSION
+
+
+def test_english_only_entry_waits_for_its_meaning_then_joins_review(client):
+    """The learner adds just the word; Codex fills in the meaning and an example later, and only then are cards made."""
+    entry = manual(client, pattern=" elevated ", meaning_zh="\n  ").json()
+    assert entry["meaning_zh"] == "" and entry["review_pending"] is True and entry["in_review"] is False
+    assert client.get("/api/cards").json() == []
+    assert manual(client, pattern="Elevated", meaning_zh="").status_code == 409  # the same word twice
+    row = client.get("/api/chunks").json()[0]
+    assert row["review_pending"] is True and row["in_review"] is False
+
+    assert client.patch(f"/api/chunks/{entry['id']}", json={"meaning_zh": "  "}).status_code == 400
+    filled = client.patch(f"/api/chunks/{entry['id']}", json={
+        "meaning_zh": "提高的；升高的", "context_en": "Stress keeps his blood pressure elevated.",
+        "context_zh": "压力让他的血压一直偏高。",
+    }).json()
+    assert filled["review_pending"] is False and filled["in_review"] is True
+    assert filled["context_zh"] == "压力让他的血压一直偏高。"
+    cards = client.get("/api/cards").json()
+    assert {c["kind"] for c in cards} == {"produce", "listen", "cloze"}  # made from the example filled in
+    assert all(c["prompt_zh"] == "提高的；升高的" for c in cards)
+
+
+def test_record_only_entry_without_meaning_stays_out_of_review(client):
+    entry = manual(client, pattern="elevated", meaning_zh="", add_to_review=False).json()
+    assert entry["review_pending"] is False
+    client.patch(f"/api/chunks/{entry['id']}", json={"meaning_zh": "提高的"})
+    assert client.get("/api/cards").json() == []
+    # Asking for review before the meaning exists waits for it.
+    other = manual(client, pattern="come across", meaning_zh="", add_to_review=False).json()
+    assert client.post(f"/api/chunks/{other['id']}/review").json()["review_pending"] is True
+    assert client.get("/api/cards").json() == []
+    client.patch(f"/api/chunks/{other['id']}", json={"context_en": "I came across it."})  # still no meaning
+    assert client.get("/api/cards").json() == []
+    assert client.patch(f"/api/chunks/{other['id']}", json={"meaning_zh": "偶然发现"}).json()["in_review"] is True
+
+
+def test_upgrade_adds_review_pending(client):
+    manual(client)
+    with app.db.connect() as conn:  # back to a v14 database
+        conn.execute("ALTER TABLE saved_chunks DROP COLUMN review_pending")
+        conn.execute("PRAGMA user_version = 14")
+    assert app.db.init_db() == 14
+    assert client.get("/api/chunks").json()[0]["review_pending"] is False

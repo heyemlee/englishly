@@ -122,16 +122,26 @@ export type SavedChunk = Chunk & {
   source_label: string;
   notes: string;
   in_review: boolean;
+  review_pending: boolean; // asked to join review before it had a meaning: joins once the meaning is filled in
 };
 
+/** A word added by hand: only the English is needed; the meaning and example can be filled in later. */
 export type ManualChunkIn = {
   pattern: string;
   meaning_zh: string;
   context_en: string;
-  context_zh: string;
-  source_label: string;
-  notes: string;
   add_to_review: boolean;
+};
+
+/** What the notebook shows about an entry after saving, filling in or enrolling it. */
+export type ChunkState = {
+  id: number;
+  pattern: string;
+  meaning_zh: string;
+  context_en: string;
+  context_zh: string;
+  in_review: boolean;
+  review_pending: boolean;
 };
 
 export type AttemptIn = {
@@ -329,9 +339,9 @@ export const api = {
   chunks: () => request<SavedChunk[]>("/api/chunks"),
   saveChunk: (sentence_id: number, pattern: string, meaning_zh: string) =>
     request<Chunk>("/api/chunks", { method: "POST", body: json({ sentence_id, pattern, meaning_zh }) }),
-  addManualChunk: (body: ManualChunkIn) => request<Chunk>("/api/chunks/manual", { method: "POST", body: json(body) }),
-  enrollChunk: (id: number) => request<{ ok: boolean }>(`/api/chunks/${id}/review`, { method: "POST" }),
-  updateChunk: (id: number, meaning_zh: string) => request<Chunk>(`/api/chunks/${id}`, { method: "PATCH", body: json({ meaning_zh }) }),
+  addManualChunk: (body: ManualChunkIn) => request<ChunkState>("/api/chunks/manual", { method: "POST", body: json(body) }),
+  enrollChunk: (id: number) => request<ChunkState>(`/api/chunks/${id}/review`, { method: "POST" }),
+  updateChunk: (id: number, meaning_zh: string) => request<ChunkState>(`/api/chunks/${id}`, { method: "PATCH", body: json({ meaning_zh }) }),
   deleteChunk: (id: number) => request<{ ok: boolean }>(`/api/chunks/${id}`, { method: "DELETE" }),
 
   reviewQueue: () => request<QueueState>("/api/review"),

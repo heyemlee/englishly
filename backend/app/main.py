@@ -265,7 +265,8 @@ def list_chunks():
              ORDER BY c.id DESC
             """
         ).fetchall()
-    return [{**dict(r), "has_audio": bool(r["has_audio"]), "in_review": bool(r["in_review"])} for r in rows]
+    return [{**dict(r), "has_audio": bool(r["has_audio"]), "in_review": bool(r["in_review"]),
+             "review_pending": bool(r["review_pending"])} for r in rows]
 
 
 @app.post("/api/chunks")
@@ -294,7 +295,7 @@ def save_chunk(body: ChunkIn):
 
 class ManualChunkIn(BaseModel):
     pattern: str = Field(min_length=1, max_length=200)
-    meaning_zh: str = Field(min_length=1, max_length=200)
+    meaning_zh: str = Field(default="", max_length=200)  # may come later (Codex fills it in via PATCH)
     context_en: str = Field(default="", max_length=1000)
     context_zh: str = Field(default="", max_length=1000)
     source_label: str = Field(default="", max_length=200)
@@ -320,11 +321,27 @@ def enroll_chunk(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
         raise HTTPException(409, "这条例句和释义已有对应的复习卡，请补充更具体的释义后重试。")
 
 
+def enroll_or_wait(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
+    """Join review now, or, without a meaning to prompt with yet, as soon as one is filled in."""
+    if row["meaning_zh"]:
+        enroll_chunk(conn, row)
+    conn.execute("UPDATE saved_chunks SET review_pending = ? WHERE id = ?", (int(not row["meaning_zh"]), row["id"]))
+
+
+def chunk_state(conn: sqlite3.Connection, chunk_id: int) -> dict:
+    row = conn.execute(
+        """SELECT id, pattern, meaning_zh, context_en, context_zh, review_pending,
+                  EXISTS(SELECT 1 FROM cards WHERE chunk_id = saved_chunks.id) AS in_review
+             FROM saved_chunks WHERE id = ?""", (chunk_id,),
+    ).fetchone()
+    return {**dict(row), "review_pending": bool(row["review_pending"]), "in_review": bool(row["in_review"])}
+
+
 @app.post("/api/chunks/manual")
 def create_manual_chunk(body: ManualChunkIn):
     pattern, meaning = " ".join(body.pattern.split()), body.meaning_zh.strip()
-    if not pattern or not meaning:
-        raise HTTPException(400, "请填写英文和中文意思。")
+    if not pattern:
+        raise HTTPException(400, "请填写英文。")
     with connect() as conn:
         try:
             cur = conn.execute(
@@ -335,11 +352,11 @@ def create_manual_chunk(body: ManualChunkIn):
                  body.source_label.strip(), body.notes.strip()),
             )
         except sqlite3.IntegrityError:
-            raise HTTPException(409, "单词本中已有相同的英文和释义，请搜索查看。")
+            raise HTTPException(409, "单词本中已有相同的英文和释义，请搜索查看。" if meaning else "单词本里已经有这个词了，请搜索查看。")
         row = conn.execute("SELECT * FROM saved_chunks WHERE id = ?", (cur.lastrowid,)).fetchone()
         if body.add_to_review:
-            enroll_chunk(conn, row)
-    return {"id": row["id"], "pattern": pattern, "meaning_zh": meaning}
+            enroll_or_wait(conn, row)
+        return chunk_state(conn, row["id"])
 
 
 @app.post("/api/chunks/{chunk_id}/review")
@@ -348,8 +365,8 @@ def enroll_saved_chunk(chunk_id: int):
         row = conn.execute("SELECT * FROM saved_chunks WHERE id = ?", (chunk_id,)).fetchone()
         if not row:
             raise HTTPException(404, "找不到这个词条。")
-        enroll_chunk(conn, row)
-    return {"ok": True}
+        enroll_or_wait(conn, row)
+        return {"ok": True, **chunk_state(conn, chunk_id)}
 
 
 @app.delete("/api/chunks/{chunk_id}")
@@ -359,26 +376,35 @@ def delete_chunk(chunk_id: int):
     return {"ok": True}
 
 
-class ChunkMeaningPatch(BaseModel):
-    meaning_zh: str = Field(min_length=1, max_length=200)
+class ChunkPatch(BaseModel):
+    """Correct an entry, or fill in a word added on its own. Fields left out keep their value."""
+
+    meaning_zh: str | None = Field(default=None, max_length=200)
+    context_en: str | None = Field(default=None, max_length=1000)
+    context_zh: str | None = Field(default=None, max_length=1000)
 
 
 @app.patch("/api/chunks/{chunk_id}")
-def update_chunk(chunk_id: int, body: ChunkMeaningPatch):
-    meaning = body.meaning_zh.strip()
-    if not meaning:
+def update_chunk(chunk_id: int, body: ChunkPatch):
+    fields = {k: v.strip() for k, v in body.model_dump().items() if v is not None}
+    if fields.get("meaning_zh") == "":
         raise HTTPException(400, "请填写中文意思。")
     with connect() as conn:
-        row = conn.execute("SELECT * FROM saved_chunks WHERE id = ?", (chunk_id,)).fetchone()
-        if not row:
+        if not conn.execute("SELECT 1 FROM saved_chunks WHERE id = ?", (chunk_id,)).fetchone():
             raise HTTPException(404, "找不到这个语块。")
         try:
-            conn.execute("UPDATE saved_chunks SET meaning_zh = ? WHERE id = ?", (meaning, chunk_id))
-            # Edit content without resetting card IDs, FSRS schedules or review history.
-            conn.execute("UPDATE cards SET prompt_zh = ? WHERE chunk_id = ?", (meaning, chunk_id))
+            if fields:
+                conn.execute(f"UPDATE saved_chunks SET {', '.join(f'{k} = ?' for k in fields)} WHERE id = ?",
+                             (*fields.values(), chunk_id))
+            if "meaning_zh" in fields:
+                # Edit content without resetting card IDs, FSRS schedules or review history.
+                conn.execute("UPDATE cards SET prompt_zh = ? WHERE chunk_id = ?", (fields["meaning_zh"], chunk_id))
         except sqlite3.IntegrityError:
             raise HTTPException(409, "已有相同英文和释义的词条或复习卡，请补充更具体的释义。")
-    return {"id": chunk_id, "pattern": row["pattern"], "meaning_zh": meaning}
+        row = conn.execute("SELECT * FROM saved_chunks WHERE id = ?", (chunk_id,)).fetchone()
+        if row["review_pending"] and row["meaning_zh"]:  # waiting for this meaning to join review
+            enroll_or_wait(conn, row)
+        return chunk_state(conn, chunk_id)
 
 
 def episode_detail(conn: sqlite3.Connection, episode_id: int) -> dict:

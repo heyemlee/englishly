@@ -9,8 +9,9 @@ from .config import DB_PATH
 # 1: v0.1; 2: cards, phrases, conversations, retells; 3: settings; 4: podcasts; 5: card kinds;
 # 6: YouTube channels and audio; 7: AI features removed (phrases, conversations, AI notes and feedback);
 # 8: Chinese translations; 9: study annotations, clip lessons and listening progress; 10: manual notebook entries;
-# 11: locally playable video; 12: starred episodes; 13: on-site streaming study; 14: official Chinese subtitle tracks
-SCHEMA_VERSION = 14
+# 11: locally playable video; 12: starred episodes; 13: on-site streaming study; 14: official Chinese subtitle tracks;
+# 15: notebook entries waiting for a meaning before they join review
+SCHEMA_VERSION = 15
 
 # One expression gives up to three cards ("siblings", same `note`): produce (see the meaning, say the English),
 # listen (hear the original sentence, get the meaning) and cloze (fill in the expression).
@@ -77,6 +78,8 @@ CREATE TABLE IF NOT EXISTS saved_chunks (
     context_zh   TEXT NOT NULL DEFAULT '',
     source_label TEXT NOT NULL DEFAULT '',
     notes        TEXT NOT NULL DEFAULT '',
+    -- Asked to join review before it had a Chinese meaning: its cards are made once the meaning is filled in.
+    review_pending INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (pattern, sentence_id)
 );
@@ -279,6 +282,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
                           ("source_label", ""), ("notes", "")):
         if name not in chunk_columns:
             conn.execute(f"ALTER TABLE saved_chunks ADD COLUMN {name} TEXT NOT NULL DEFAULT '{default}'")
+    if "review_pending" not in chunk_columns:  # v15
+        conn.execute("ALTER TABLE saved_chunks ADD COLUMN review_pending INTEGER NOT NULL DEFAULT 0")
     conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_chunk_text
                     ON saved_chunks(lower(pattern), meaning_zh) WHERE entry_source = 'manual'""")
 
